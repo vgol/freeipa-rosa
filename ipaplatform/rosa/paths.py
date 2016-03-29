@@ -23,7 +23,7 @@ class RosaPathNamespace(RedHatPathNamespace):
     BIN_NISDOMAINNAME = "/bin/nisdomainname"
     LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system"
     RESTORECON = "/sbin/restorecon"
-    SBIN_REBOOT = "/sbin/reboot"
+    SBIN_REBOOT = "/bin/reboot"
 
 
 paths = RosaPathNamespace()

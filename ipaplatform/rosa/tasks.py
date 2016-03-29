@@ -37,16 +37,16 @@ class RosaTaskNamespace(RedHatTaskNamespace):
         if sssd:
             statestore.backup_state('rosaac', 'sssd', True)
             statestore.backup_state('rosaac', 'sssdauth', True)
-            auth_config.options.sssd = True
-            auth_config.options.sssdauth = True
+            auth_config.options.enablesssd = True
+            auth_config.options.enablesssdauth = True
         else:
             statestore.backup_state('rosaac', 'ldap', True)
-            auth_config.options.ldap = True
-            auth_config.options.forcelegacy = True
+            auth_config.options.enableldap = True
+            auth_config.options.enableforcelegacy = True
 
         if mkhomedir:
             statestore.backup_state('rosaac', 'mkhomedir', True)
-            auth_config.options.mkhomedir = True
+            auth_config.options.enablemkhomedir = True
 
         auth_config.run()
 

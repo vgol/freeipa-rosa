@@ -47,11 +47,7 @@ except ImportError:
 _ = gettext.gettext
 
 SYSCONFDIR = "/etc"
-
-if "lib64" in str(globals()["acutil"]):
-    LIBDIR = "/lib64"
-else:
-    LIBDIR = "/lib"
+LIBDIR = os.sep + sys.lib
 
 AUTH_MODULE_DIR = LIBDIR + "/security"
 
@@ -989,9 +985,18 @@ class AuthConfig:
                            "ipav2server": "ipav2Server"}
 
         for opt, aival in bool_settings.items():
-            if getattr(self.options, "enable" + opt):
+            try:
+                getattr(self.options, "enable" + opt)
+            except AttributeError:
+                setattr(self.info, aival, False)
+            else:
                 setattr(self.info, aival, True)
-            if getattr(self.options, "disable" + opt):
+
+            try:
+                getattr(self.options, "disable" + opt)
+            except AttributeError:
+                setattr(self.info, aival, False)
+            else:
                 setattr(self.info, aival, False)
 
         try:
@@ -1000,8 +1005,11 @@ class AuthConfig:
             pass
 
         for opt, aival in string_settings.items():
-            if getattr(self.options, opt) is not None:
-                setattr(self.info, aival, getattr(self.options, opt))
+            try:
+                if getattr(self.options, opt) is not None:
+                    setattr(self.info, aival, getattr(self.options, opt))
+            except AttributeError:
+                pass
 
     def writeAuthInfo(self):
         self.info.testLDAPCACerts()
@@ -1011,9 +1019,6 @@ class AuthConfig:
         self.info.rehashLDAPCACerts()
         if not self.info.writeChanged(self.pristineinfo):
             self.retval = 6
-        if not self.joinDomain():
-            self.retval = 7
-        self.info.post(self.options.nostart)
 
 
 def stringsDiffer(a, b, case_sensitive):
@@ -1140,6 +1145,11 @@ class AuthInfo:
         self.smbRealm = ""
         self.smbServers = ""
 
+        self.ipaDomainJoined = False
+
+        self.smartcardModule = ""
+        self.smartcardAction = ""
+
         global SSSDConfig
         self.sssdConfig = None
         self.sssdDomain = None
@@ -1232,7 +1242,7 @@ class AuthInfo:
         self.readKerberos(ref)
         if self.implicitSSSD or self.implicitSSSDAuth:
             self.readSSSD(ref)
-        self.readCahe(ref)
+        self.readCache(ref)
         self.update()
 
     # Read whether or not caching is enabled.
