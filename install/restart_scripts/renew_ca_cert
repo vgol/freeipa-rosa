@@ -1,0 +1,226 @@
+#!/usr/bin/python2 -E
+#
+# Authors:
+#   Rob Crittenden <rcritten@redhat.com>
+#   Jan Cholasta <jcholast@redhat.com>
+#
+# Copyright (C) 2013  Red Hat
+# see file 'COPYING' for use and warranty information
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import sys
+import os
+import syslog
+import tempfile
+import shutil
+import traceback
+
+from ipapython import dogtag, ipautil
+from ipapython.dn import DN
+from ipalib import api, errors, x509, certstore
+from ipaserver.install import certs, cainstance, installutils
+from ipaserver.plugins.ldap2 import ldap2
+from ipaplatform import services
+from ipaplatform.paths import paths
+
+
+def _main():
+    nickname = sys.argv[1]
+
+    api.bootstrap(context='restart')
+    api.finalize()
+
+    configured_constants = dogtag.configured_constants(api)
+    alias_dir = configured_constants.ALIAS_DIR
+    dogtag_service = services.knownservices[configured_constants.SERVICE_NAME]
+    dogtag_instance = configured_constants.PKI_INSTANCE_NAME
+
+    # dogtag opens its NSS database in read/write mode so we need it
+    # shut down so certmonger can open it read/write mode. This avoids
+    # database corruption. It should already be stopped by the pre-command
+    # but lets be sure.
+    if dogtag_service.is_running(dogtag_instance):
+        syslog.syslog(
+            syslog.LOG_NOTICE, "Stopping %s" % dogtag_service.service_name)
+        try:
+            dogtag_service.stop(dogtag_instance)
+        except Exception, e:
+            syslog.syslog(
+                syslog.LOG_ERR,
+                "Cannot stop %s: %s" % (dogtag_service.service_name, e))
+        else:
+            syslog.syslog(
+                syslog.LOG_NOTICE, "Stopped %s" % dogtag_service.service_name)
+
+    # Fetch the new certificate
+    db = certs.CertDB(api.env.realm, nssdir=alias_dir)
+    cert = db.get_cert_from_db(nickname, pem=False)
+    if not cert:
+        syslog.syslog(syslog.LOG_ERR, 'No certificate %s found.' % nickname)
+        sys.exit(1)
+
+    tmpdir = tempfile.mkdtemp(prefix="tmp-")
+    try:
+        principal = str('host/%s@%s' % (api.env.host, api.env.realm))
+        ccache_filename = os.path.join(tmpdir, 'ccache')
+        ipautil.kinit_keytab(principal, paths.KRB5_KEYTAB, ccache_filename)
+        os.environ['KRB5CCNAME'] = ccache_filename
+
+        ca = cainstance.CAInstance(host_name=api.env.host, ldapi=False)
+        ca.update_cert_config(nickname, cert, configured_constants)
+        if ca.is_renewal_master():
+            cainstance.update_people_entry(cert)
+
+        if nickname == 'auditSigningCert cert-pki-ca':
+            # Fix trust on the audit cert
+            try:
+                db.run_certutil(['-M',
+                                 '-n', nickname,
+                                 '-t', 'u,u,Pu'])
+                syslog.syslog(
+                    syslog.LOG_NOTICE,
+                    "Updated trust on certificate %s in %s" %
+                    (nickname, db.secdir))
+            except ipautil.CalledProcessError:
+                syslog.syslog(
+                    syslog.LOG_ERR,
+                    "Updating trust on certificate %s failed in %s" %
+                    (nickname, db.secdir))
+        elif nickname == 'caSigningCert cert-pki-ca':
+            # Update CS.cfg
+            cfg_path = configured_constants.CS_CFG_PATH
+            config = installutils.get_directive(
+                cfg_path, 'subsystem.select', '=')
+            if config == 'New':
+                syslog.syslog(syslog.LOG_NOTICE, "Updating CS.cfg")
+                if x509.is_self_signed(cert, x509.DER):
+                    installutils.set_directive(
+                        cfg_path, 'hierarchy.select', 'Root',
+                        quotes=False, separator='=')
+                    installutils.set_directive(
+                        cfg_path, 'subsystem.count', '1',
+                        quotes=False, separator='=')
+                else:
+                    installutils.set_directive(
+                        cfg_path, 'hierarchy.select', 'Subordinate',
+                        quotes=False, separator='=')
+                    installutils.set_directive(
+                        cfg_path, 'subsystem.count', '0',
+                        quotes=False, separator='=')
+            else:
+                syslog.syslog(syslog.LOG_NOTICE, "Not updating CS.cfg")
+
+            # Remove old external CA certificates
+            for ca_nick, ca_flags in db.list_certs():
+                if 'u' in ca_flags:
+                    continue
+                # Delete *all* certificates that use the nickname
+                while True:
+                    try:
+                        db.delete_cert(ca_nick)
+                    except ipautil.CalledProcessError:
+                        syslog.syslog(
+                            syslog.LOG_ERR,
+                            "Failed to remove certificate %s" % ca_nick)
+                        break
+                    if not db.has_nickname(ca_nick):
+                        break
+
+            conn = None
+            try:
+                conn = ldap2(api)
+                conn.connect(ccache=ccache_filename)
+            except Exception, e:
+                syslog.syslog(
+                    syslog.LOG_ERR, "Failed to connect to LDAP: %s" % e)
+            else:
+                # Update CA certificate in LDAP
+                if ca.is_renewal_master():
+                    try:
+                        certstore.update_ca_cert(conn, api.env.basedn, cert)
+                    except errors.EmptyModlist:
+                        pass
+                    except Exception, e:
+                        syslog.syslog(
+                            syslog.LOG_ERR,
+                            "Updating CA certificate failed: %s" % e)
+
+                # Add external CA certificates
+                ca_issuer = str(x509.get_issuer(cert, x509.DER))
+                try:
+                    ca_certs = certstore.get_ca_certs(
+                        conn, api.env.basedn, api.env.realm, False,
+                        filter_subject=ca_issuer)
+                except Exception, e:
+                    syslog.syslog(
+                        syslog.LOG_ERR,
+                        "Failed to get external CA certificates from LDAP: "
+                        "%s" % e)
+                    ca_certs = []
+
+                for ca_cert, ca_nick, ca_trusted, ca_eku in ca_certs:
+                    ca_subject = DN(str(x509.get_subject(ca_cert, x509.DER)))
+                    nick_base = ' - '.join(rdn[-1].value for rdn in ca_subject)
+                    nick = nick_base
+                    i = 1
+                    while db.has_nickname(nick):
+                        nick = '%s [%s]' % (nick_base, i)
+                        i += 1
+                    if ca_trusted is False:
+                        flags = 'p,p,p'
+                    else:
+                        flags = 'CT,c,'
+
+                    try:
+                        db.add_cert(ca_cert, nick, flags)
+                    except ipautil.CalledProcessError, e:
+                        syslog.syslog(
+                            syslog.LOG_ERR,
+                            "Failed to add certificate %s" % ca_nick)
+            finally:
+                if conn is not None and conn.isconnected():
+                    conn.disconnect()
+    finally:
+        shutil.rmtree(tmpdir)
+
+    # Now we can start the CA. Using the services start should fire
+    # off the servlet to verify that the CA is actually up and responding so
+    # when this returns it should be good-to-go. The CA was stopped in the
+    # pre-save state.
+    syslog.syslog(
+        syslog.LOG_NOTICE,
+        'Starting %s' % dogtag_service.service_name)
+    try:
+        dogtag_service.start(dogtag_instance)
+    except Exception, e:
+        syslog.syslog(
+            syslog.LOG_ERR,
+            "Cannot start %s: %s" % (dogtag_service.service_name, e))
+    else:
+        syslog.syslog(
+            syslog.LOG_NOTICE, "Started %s" % dogtag_service.service_name)
+
+
+def main():
+    try:
+        _main()
+    finally:
+        certs.renewal_lock.release('renew_ca_cert')
+
+
+try:
+    main()
+except Exception:
+    syslog.syslog(syslog.LOG_ERR, traceback.format_exc())

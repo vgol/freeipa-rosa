@@ -1,0 +1,29 @@
+#
+# Counter used to store the next replica id
+#
+# Start at 3 to avoid conflicts with v1.0 replica ids. The value itself
+# isn't important but each replica needs a unique id.
+dn: cn=replication,cn=etc,$SUFFIX
+default: objectclass: nsDS5Replica
+default: nsDS5ReplicaId: 3
+default: nsDS5ReplicaRoot: $SUFFIX
+
+# Group containing replication bind dns
+dn: cn=replication managers,cn=sysaccounts,cn=etc,$SUFFIX
+default: objectclass: top
+default: objectclass: groupofnames
+default: cn: replication managers
+add: member: krbprincipalname=ldap/$FQDN@$REALM,cn=services,cn=accounts,$SUFFIX
+
+# Topology configuration container
+dn: cn=topology,cn=ipa,cn=etc,$SUFFIX
+default: objectclass: top
+default: objectclass: nsContainer
+default: cn: topology
+
+# Default topology configuration area
+dn: cn=realm,cn=topology,cn=ipa,cn=etc,$SUFFIX
+default: objectclass: top
+default: objectclass: iparepltopoconf
+default: ipaReplTopoConfRoot: $SUFFIX
+default: cn: realm

@@ -1,0 +1,84 @@
+#!/usr/bin/python2 -E
+#
+# Authors:
+#   Rob Crittenden <rcritten@redhat.com>
+#   Jan Cholasta <jcholast@redhat.com>
+#
+# Copyright (C) 2013  Red Hat
+# see file 'COPYING' for use and warranty information
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import sys
+import os
+import syslog
+import tempfile
+import shutil
+import traceback
+
+from ipapython import ipautil
+from ipalib import api
+from ipaserver.install import certs, cainstance
+from ipaplatform import services
+from ipaplatform.paths import paths
+
+
+def _main():
+    nickname = 'ipaCert'
+
+    api.bootstrap(context='restart')
+    api.finalize()
+
+    tmpdir = tempfile.mkdtemp(prefix="tmp-")
+    try:
+        principal = str('host/%s@%s' % (api.env.host, api.env.realm))
+        ccache_filename = os.path.join(tmpdir, 'ccache')
+        ipautil.kinit_keytab(principal, paths.KRB5_KEYTAB,
+                             ccache_filename)
+        os.environ['KRB5CCNAME'] = ccache_filename
+
+        ca = cainstance.CAInstance(host_name=api.env.host, ldapi=False)
+        if ca.is_renewal_master():
+            # Fetch the new certificate
+            db = certs.CertDB(api.env.realm)
+            dercert = db.get_cert_from_db(nickname, pem=False)
+            if not dercert:
+                syslog.syslog(
+                    syslog.LOG_ERR, "No certificate %s found." % nickname)
+                sys.exit(1)
+
+            # Load it into dogtag
+            cainstance.update_people_entry(dercert)
+    finally:
+        shutil.rmtree(tmpdir)
+
+    # Now restart Apache so the new certificate is available
+    syslog.syslog(syslog.LOG_NOTICE, "Restarting httpd")
+    try:
+        services.knownservices.httpd.restart()
+    except Exception, e:
+        syslog.syslog(syslog.LOG_ERR, "Cannot restart httpd: %s" % e)
+    else:
+        syslog.syslog(syslog.LOG_NOTICE, "Restarted httpd")
+
+
+def main():
+    with certs.renewal_lock:
+        _main()
+
+
+try:
+    main()
+except Exception:
+    syslog.syslog(syslog.LOG_ERR, traceback.format_exc())

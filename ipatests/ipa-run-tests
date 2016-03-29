@@ -1,0 +1,45 @@
+#!/usr/bin/python2
+
+# Authors:
+#   Petr Viktorin <pviktori@redhat.com>
+#   Jason Gerard DeRose <jderose@redhat.com>
+#
+# Copyright (C) 2008-2013  Red Hat
+# see file 'COPYING' for use and warranty information
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Pytest wrapper for running an installed (not in-tree) IPA test suite
+
+Any command-line arguments are passed directly to py.test.
+The current directory is changed to the locaition of the ipatests package,
+so any relative paths given will be based on the ipatests module's path
+"""
+
+import os
+import sys
+
+import pytest
+
+import ipatests
+
+# This must be set so ipalib.api gets initialized property for tests:
+os.environ['IPA_UNIT_TEST_MODE'] = 'cli_test'
+
+# This is set to store --with-xunit report in an accessible place:
+os.environ['IPATEST_XUNIT_PATH'] = os.path.join(os.getcwd(), 'nosetests.xml')
+
+os.chdir(os.path.dirname(ipatests.__file__))
+
+sys.exit(pytest.main(sys.argv[1:]))

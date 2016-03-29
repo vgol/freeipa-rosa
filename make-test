@@ -1,0 +1,4 @@
+#! /bin/bash
+
+set -ex
+IPA_UNIT_TEST_MODE=cli_test PYTHONPATH=.:$PYTHONPATH py.test "$@"
