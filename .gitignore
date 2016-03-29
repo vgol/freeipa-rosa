@@ -80,4 +80,8 @@ freeipa2-dev-doc
 /ipaplatform/paths.py
 
 # PyCharm files
-/.idea
+/.idea/
+
+# Authconfig files.
+/ipaplatform/rosa/authconfig.py
+/ipaplatform/rosa/authinfo.py
