@@ -78,3 +78,6 @@ freeipa2-dev-doc
 /ipaplatform/tasks.py
 /ipaplatform/services.py
 /ipaplatform/paths.py
+
+# PyCharm files
+/.idea
