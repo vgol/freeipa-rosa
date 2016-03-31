@@ -891,11 +891,11 @@ sssd_options = [
 
 class Options:
     def __init__(self):
-        self.sssd = False
-        self.sssdauth = False
-        self.ldap = False
-        self.forcelegacy = False
-        self.mkhomedir = False
+        self.enablesssd = False
+        self.enablesssdauth = False
+        self.enableldap = False
+        self.enableforcelegacy = False
+        self.enablemkhomedir = False
 
 
 class AuthConfig:
@@ -988,14 +988,14 @@ class AuthConfig:
             try:
                 getattr(self.options, "enable" + opt)
             except AttributeError:
-                setattr(self.info, aival, False)
+                pass
             else:
                 setattr(self.info, aival, True)
 
             try:
                 getattr(self.options, "disable" + opt)
             except AttributeError:
-                setattr(self.info, aival, False)
+                pass
             else:
                 setattr(self.info, aival, False)
 
