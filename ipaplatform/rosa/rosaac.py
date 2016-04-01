@@ -12,7 +12,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Docstring will be here
+# This module based on authconfig (see Copyright below).
+
+# Authconfig - client authentication configuration program
+# Copyright (c) 1999-2014 Red Hat, Inc.
+#
+# Authors: Preston Brown <pbrown@redhat.com>
+#          Nalin Dahyabhai <nalin@redhat.com>
+#          Matt Wilson <msw@redhat.com>
+#          Tomas Mraz <tmraz@redhat.com>
+#          Ray Strode <rstrode@redhat.com>
+#          Paolo Bonzini <pbonzini@redhat.com>
+#          Miloslav Trmac <mitr@redhat.com>
+#          Jan Lieskovsky <jlieskov@redhat.com>
+
+
+"""This module provides authconfig functionality for ROSA linux
+platform.
+
 """
 import gettext
 import os
