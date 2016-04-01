@@ -28,8 +28,8 @@ class RosaTaskNamespace(RedHatTaskNamespace):
         print "restore_pre_ipa_client_configuration called"
 
     def set_nisdomain(self, nisdomain):
-        # FIXME: Implement the method.
-        print "set_nisdomain called"
+        # Skip this one. Don't try to use authconfig.
+        pass
 
     def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore):
         auth_config = AuthConfig()

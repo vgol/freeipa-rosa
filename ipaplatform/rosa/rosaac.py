@@ -698,7 +698,7 @@ class SafeFile:
         os.fsync(self.file.fileno())
         os.rename(self.file.name, self.filename)
         if self.missing:
-            call(["/usr/sbin/restorecon", self.filename],
+            call([paths.RESTORECON, self.filename],
                  stderr=os.open('/dev/null', os.O_WRONLY))
 
     def close(self):
@@ -1149,6 +1149,8 @@ class AuthInfo:
 
         self.smartcardModule = ""
         self.smartcardAction = ""
+
+        self.pamLinked = True
 
         global SSSDConfig
         self.sssdConfig = None
@@ -1820,7 +1822,6 @@ class AuthInfo:
             # must uninstall IPAv2
             self.ipaDomainJoined = False
             self.ipaUninstall = True
-
 
     def setupBackup(self, backupdir):
         if not os.path.isdir(PATH_CONFIG_BACKUPS):
