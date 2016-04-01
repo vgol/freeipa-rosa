@@ -24,8 +24,30 @@ class RosaTaskNamespace(RedHatTaskNamespace):
     def restore_pre_ipa_client_configuration(self, fstore, statestore,
                                              was_sssd_installed,
                                              was_sssd_configured):
-        # FIXME: Implement the method.
-        print "restore_pre_ipa_client_configuration called"
+
+        auth_config = AuthConfig()
+        if statestore.has_state('rosaac'):
+            # disable only those configurations that we enabled during install
+            for conf in ('ldap', 'krb5', 'sssd', 'sssdauth', 'mkhomedir'):
+                cnf = statestore.restore_state('authconfig', conf)
+                # Do not disable sssd, as this can cause issues with its later
+                # uses. Remove it from statestore however, so that it becomes
+                # empty at the end of uninstall process.
+                if cnf and conf != 'sssd':
+                    setattr(auth_config.options, 'disable' + conf, True)
+        else:
+            # There was no authconfig status store
+            # It means the code was upgraded after original install
+            # Fall back to old logic
+            auth_config.options.disableldap = True
+            auth_config.options.disablekrb5 = True
+            if not (was_sssd_installed and was_sssd_configured):
+                # Only disable sssdauth. Disabling sssd would cause issues
+                # with its later uses.
+                auth_config.options.disablesssdauth = True
+            auth_config.options.disablemkhomedir = True
+
+        auth_config.run()
 
     def set_nisdomain(self, nisdomain):
         # Skip this one. Don't try to use authconfig.
@@ -51,8 +73,11 @@ class RosaTaskNamespace(RedHatTaskNamespace):
         auth_config.run()
 
     def modify_pam_to_use_krb5(self, statestore):
-        # FIXME: Implement the method.
-        print "modify_pam_to_use_krb5 called"
+        auth_config = AuthConfig()
+        statestore.backup_state('rosaac', 'krb5', True)
+        auth_config.options.enablekrb5 = True
+        auth_config.options.nostart = True
+        auth_config.run()
 
 
 tasks = RosaTaskNamespace()

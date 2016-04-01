@@ -913,6 +913,13 @@ class Options:
         self.enableldap = False
         self.enableforcelegacy = False
         self.enablemkhomedir = False
+        self.enablekrb5 = False
+        self.nostart = False
+        self.disableldap = False
+        self.disablekrb5 = False
+        self.disablesssd = False
+        self.disablesssdauth = False
+        self.disablemkhomedir = False
 
 
 class AuthConfig:
@@ -1003,18 +1010,20 @@ class AuthConfig:
 
         for opt, aival in bool_settings.items():
             try:
-                getattr(self.options, "enable" + opt)
+                enable = getattr(self.options, "enable" + opt)
             except AttributeError:
                 pass
             else:
-                setattr(self.info, aival, True)
+                if enable:
+                    setattr(self.info, aival, True)
 
             try:
-                getattr(self.options, "disable" + opt)
+                disable = getattr(self.options, "disable" + opt)
             except AttributeError:
                 pass
             else:
-                setattr(self.info, aival, False)
+                if disable:
+                    setattr(self.info, aival, False)
 
         try:
             self.info.ldapSchema = ''
