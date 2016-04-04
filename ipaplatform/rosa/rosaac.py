@@ -45,6 +45,8 @@ from subprocess import call, Popen, PIPE
 
 import errno
 
+import shutil
+
 if sys.version_info[0] < 3:
     import urllib2 as request
     import urlparse as parse
@@ -114,6 +116,8 @@ LDAP_CACERT_DOWNLOADED = "authconfig_downloaded.pem"
 PATH_RPCBIND = "/sbin/rpcbind"
 PATH_YPBIND = "/usr/sbin/ypbind"
 PATH_ODDJOBD = "/usr/sbin/oddjobd"
+
+PATH_KDMRC = "/usr/share/config/kdm/kdmrc"
 
 LOGIC_REQUIRED = "required"
 LOGIC_REQUISITE = "requisite"
@@ -922,6 +926,24 @@ class Options:
         self.disablemkhomedir = False
 
 
+def kdmTheme(useTheme=True):
+    bp = PATH_KDMRC + ".ipabp"
+    try:
+        os.rename(PATH_KDMRC, bp)
+        with open(PATH_KDMRC, 'w') as kdm:
+            for line in open(bp):
+                if "UseTheme=" in line:
+                    if useTheme:
+                        kdm.write("UseTheme=true\n")
+                    else:
+                        kdm.write("UseTheme=false\n")
+                else:
+                    kdm.write(line)
+    except OSError:
+        print >> sys.stderr, ("Something wrong with kdmrc " +
+                              "configuring. Check it manually.")
+
+
 class AuthConfig:
     def __init__(self):
         # self.nis_avail = False
@@ -1049,6 +1071,12 @@ class AuthConfig:
         # Ensure oddjobd.services toggled.
         if self.options.enablemkhomedir:
             self.info.toggleOddjobService(nostart=False)
+
+        # kdmrc tweak.
+        if self.options.enablesssdauth or self.options.enableldap:
+            kdmTheme(False)
+        elif self.options.disablesssdauth or self.options.disableldap:
+            kdmTheme(True)
 
 
 def stringsDiffer(a, b, case_sensitive):
@@ -3062,3 +3090,4 @@ def toggleSplatbindService(enable, path, name, nostart):
         except OSError:
             pass
     return True
+

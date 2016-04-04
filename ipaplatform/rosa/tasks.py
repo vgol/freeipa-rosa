@@ -29,7 +29,7 @@ class RosaTaskNamespace(RedHatTaskNamespace):
         if statestore.has_state('rosaac'):
             # disable only those configurations that we enabled during install
             for conf in ('ldap', 'krb5', 'sssd', 'sssdauth', 'mkhomedir'):
-                cnf = statestore.restore_state('authconfig', conf)
+                cnf = statestore.restore_state('rosaac', conf)
                 # Do not disable sssd, as this can cause issues with its later
                 # uses. Remove it from statestore however, so that it becomes
                 # empty at the end of uninstall process.
