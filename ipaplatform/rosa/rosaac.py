@@ -1042,9 +1042,13 @@ class AuthConfig:
         if self.info.ldapCacertURL:
             if not self.info.downloadLDAPCACert():
                 self.retval = 4
-        self.info.rehashLDAPCACerts()
+        # There is no cacertdir_rehash script.
+        # self.info.rehashLDAPCACerts()
         if not self.info.writeChanged(self.pristineinfo):
             self.retval = 6
+        # Ensure oddjobd.services toggled.
+        if self.options.enablemkhomedir:
+            self.info.toggleOddjobService(nostart=False)
 
 
 def stringsDiffer(a, b, case_sensitive):
@@ -1790,6 +1794,7 @@ class AuthInfo:
         if ((self.enableLDAP or self.enableLDAPAuth) and
                 (self.enableLDAPS or 'ldaps:' in self.ldapServer)) or self.ldapCacertURL:
             os.system("/usr/sbin/cacertdir_rehash " + self.ldapCacertDir)
+
 
     def downloadLDAPCACert(self):
         if not self.ldapCacertURL:
