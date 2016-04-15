@@ -118,6 +118,7 @@ PATH_YPBIND = "/usr/sbin/ypbind"
 PATH_ODDJOBD = "/usr/sbin/oddjobd"
 
 PATH_KDMRC = "/usr/share/config/kdm/kdmrc"
+KDM_THEMES = "/usr/share/apps/kdm/themes"
 
 LOGIC_REQUIRED = "required"
 LOGIC_REQUISITE = "requisite"
@@ -926,17 +927,21 @@ class Options:
         self.disablemkhomedir = False
 
 
-def kdmTheme(useTheme=True):
+def kdmSetTheme(cfg, theme):
+    cfg.write("Theme=" + os.path.join(KDM_THEMES, theme) + '\n')
+
+
+def kdmROSATheme(useROSATheme=True):
     bp = PATH_KDMRC + ".ipabp"
     try:
         os.rename(PATH_KDMRC, bp)
         with open(PATH_KDMRC, 'w') as kdm:
             for line in open(bp):
-                if "UseTheme=" in line:
-                    if useTheme:
-                        kdm.write("UseTheme=true\n")
+                if line.startswith("Theme="):
+                    if useROSATheme:
+                        kdmSetTheme(kdm, "mandriva-kde4")
                     else:
-                        kdm.write("UseTheme=false\n")
+                        kdmSetTheme(kdm, "horos")
                 else:
                     kdm.write(line)
     except OSError:
@@ -1074,9 +1079,9 @@ class AuthConfig:
 
         # kdmrc tweak.
         if self.options.enablesssdauth or self.options.enableldap:
-            kdmTheme(False)
+            kdmROSATheme(False)
         elif self.options.disablesssdauth or self.options.disableldap:
-            kdmTheme(True)
+            kdmROSATheme(True)
 
 
 def stringsDiffer(a, b, case_sensitive):
